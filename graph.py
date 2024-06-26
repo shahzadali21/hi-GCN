@@ -21,10 +21,11 @@ def grid(m, dtype=np.float32):
 
 
 def distance_scipy_spatial(z, k=4, metric='euclidean'):
-    """Compute exact pairwise distances."""
+    """Compute exact pairwise distances using SciPy's spatial distance functions."""
     d = scipy.spatial.distance.pdist(z, metric)
     d = scipy.spatial.distance.squareform(d)
-    # k-NN graph.
+    
+    # k-NN graph 
     idx = np.argsort(d)[:, 1:k+1]
     d.sort()
     d = d[:, 1:k+1]
@@ -32,9 +33,10 @@ def distance_scipy_spatial(z, k=4, metric='euclidean'):
 
 
 def distance_sklearn_metrics(z, k=4, metric='euclidean'):
-    """Compute exact pairwise distances."""
+    """Compute exact pairwise distances using scikit-learn's metrics module."""
     d = sklearn.metrics.pairwise.pairwise_distances(z, metric=metric)
-    # k-NN graph.
+    
+    # k-NN graph 
     idx = np.argsort(d)[:, 1:k+1]
     d.sort()
     d = d[:, 1:k+1]
@@ -43,7 +45,7 @@ def distance_sklearn_metrics(z, k=4, metric='euclidean'):
 
 def distance_lshforest(z, k=4, metric='cosine'):
     """Return an approximation of the k-nearest cosine distances."""
-    assert metric is 'cosine'
+    assert metric == 'cosine'   # assert metric is 'cosine'
     lshf = sklearn.neighbors.LSHForest()
     lshf.fit(z)
     dist, idx = lshf.kneighbors(z, n_neighbors=k+1)
@@ -60,20 +62,20 @@ def adjacency(dist, idx):
     assert M, k == idx.shape
     assert dist.min() >= 0
 
-    # Weights.
+    # Weights
     sigma2 = np.mean(dist[:, -1])**2
     dist = np.exp(- dist**2 / sigma2)
 
-    # Weight matrix.
+    # Create the weight matrix.
     I = np.arange(0, M).repeat(k)
     J = idx.reshape(M*k)
     V = dist.reshape(M*k)
     W = scipy.sparse.coo_matrix((V, (I, J)), shape=(M, M))
 
-    # No self-connections.
+    # No self-connections
     W.setdiag(0)
 
-    # Non-directed graph.
+    # Non-directed graph
     bigger = W.T > W
     W = W - W.multiply(bigger) + W.T.multiply(bigger)
 
@@ -117,10 +119,10 @@ def replace_random_edges(A, noise_level):
 def laplacian(W, normalized=True):
     """Return the Laplacian of the weigth matrix."""
 
-    # Degree matrix.
+    # Degree matrix 
     d = W.sum(axis=0)
 
-    # Laplacian matrix.
+    # Laplacian matrix 
     if not normalized:
         D = scipy.sparse.diags(d.A.squeeze(), 0)
         L = D - W
@@ -137,7 +139,7 @@ def laplacian(W, normalized=True):
 
 
 def lmax(L, normalized=True):
-    """Upper-bound on the spectrum."""
+    """Upper bound on the spectrum."""
     if normalized:
         return 2
     else:
@@ -146,27 +148,24 @@ def lmax(L, normalized=True):
 
 
 def fourier(L, algo='eigh', k=1, norm = 2):
-    """Return the Fourier basis, i.e. the EVD of the Laplacian."""
-
+    """Compute the Fourier basis, i.e. the EVD of the Laplacian."""
     def sort(lamb, U):
         idx = lamb.argsort()
         return lamb[idx], U[:, idx]
 
-    if algo is 'eig':
+    if algo == 'eig':    # if algo is 'eig':
         lamb, U = np.linalg.eig(L.toarray())
         lamb, U = sort(lamb, U)
-    elif algo is 'eigh':
+    elif algo == 'eigh':
         lamb, U = np.linalg.eigh(L.toarray())
-    elif algo is 'eigs':
+    elif algo == 'eigs':
         lamb, U = scipy.sparse.linalg.eigs(L, k=k, which='SM')
         lamb, U = sort(lamb, U)
-    elif algo is 'eigsh':
+    elif algo == 'eigsh':
         lamb, U = scipy.sparse.linalg.eigsh(L, k=k, which='SM')
 
     # norm = 'l' + str(norm)
     # U = preprocessing.normalize(U,norm = norm ,axis =0)
-
-
 
     return lamb, U
 
@@ -226,6 +225,7 @@ def lanczos(L, X, K):
 
     V, a, b = basis(L, X, K)
     Q = diag_H(a, b, K)
+    
     Xt = np.empty((K, M, N), L.dtype)
     for n in range(N):
         Xt[..., n] = Q[..., n].T.dot(V[..., n])
@@ -235,7 +235,7 @@ def lanczos(L, X, K):
 
 
 def rescale_L(L, lmax=2):
-    """Rescale the Laplacian eigenvalues in [-1,1]."""
+    """Rescale the Laplacian eigenvalues to [-1, 1]."""
     M, M = L.shape
     I = scipy.sparse.identity(M, format='csr', dtype=L.dtype)
     L /= lmax / 2
@@ -249,14 +249,18 @@ def chebyshev(L, X, K):
     M, N = X.shape
     assert L.dtype == X.dtype
 
+    # Initialize the output tensor for polynomial orders
     # L = rescale_L(L, lmax)
     # Xt = T @ X: MxM @ MxN.
     Xt = np.empty((K, M, N), L.dtype)
+    
     # Xt_0 = T_0 X = I X = X.
     Xt[0, ...] = X
+    
     # Xt_1 = T_1 X = L X.
     if K > 1:
         Xt[1, ...] = L.dot(X)
+        
     # Xt_k = 2 L Xt_k-1 - Xt_k-2.
     for k in range(2, K):
         Xt[k, ...] = 2 * L.dot(Xt[k-1, ...]) - Xt[k-2, ...]

@@ -5,9 +5,6 @@ import torch.utils.data
 from sklearn import preprocessing
 
 
-
-
-
 class GraphSampler(torch.utils.data.Dataset):
     ''' Sample graphs and nodes in graph
     '''
@@ -24,6 +21,7 @@ class GraphSampler(torch.utils.data.Dataset):
         
         self.assign_feat_all = []
 
+        # Determine the maximum number of nodes across all graphs if not provided
         if max_num_nodes == 0:
             self.max_num_nodes = max([G.number_of_nodes() for G in G_list])
         else:
@@ -33,6 +31,7 @@ class GraphSampler(torch.utils.data.Dataset):
         #print(G_list[0].node[0]['feat'].shape[0])
         self.feat_dim = G_list[0].node[0]['feat'].shape[0]
 
+        # Process each graph and store its adjacency matrix and features
         for G in G_list:
             adj = np.array(nx.to_numpy_matrix(G))
             if normalize:
@@ -42,6 +41,8 @@ class GraphSampler(torch.utils.data.Dataset):
             self.len_all.append(G.number_of_nodes())
             self.label_all.append(G.graph['label'])
             self.label_all2.append(G.graph['label2'])
+            
+            # Assign features based on the specified feature type
             if features == 'default':
                 f = np.zeros((self.max_num_nodes, self.feat_dim), dtype=float)
                 for i,u in enumerate(G.nodes()):
@@ -73,10 +74,9 @@ class GraphSampler(torch.utils.data.Dataset):
                 f = np.zeros((self.max_num_nodes, self.feat_dim), dtype=float)
                 for i,u in enumerate(G.nodes()):
                     f[i,:] = G.node[u]['feat']
-
                 feat = np.concatenate((feat, f), axis=1)
-
                 self.feature_all.append(feat)
+                
             elif features == 'struct':
                 self.max_deg = 10
                 degs = np.sum(np.array(adj), 1).astype(int)
@@ -102,9 +102,9 @@ class GraphSampler(torch.utils.data.Dataset):
 
             # print('feature shapoe 1..1.', self.feature_all[0].shape)
 
+            # Assign features for the pooling operation if necessary
             if assign_feat == 'id':
-                self.assign_feat_all.append(
-                        np.hstack((np.identity(self.max_num_nodes), self.feature_all[-1])) )
+                self.assign_feat_all.append(np.hstack((np.identity(self.max_num_nodes), self.feature_all[-1])) )
             else:
                 self.assign_feat_all.append(self.feature_all[-1])
             
@@ -122,14 +122,15 @@ class GraphSampler(torch.utils.data.Dataset):
 
         graph = self.graphs_list[idx]
 
-
         return_dic = {'adj':adj_padded,
                 'feats':self.feature_all[idx].copy(),
                 'label':self.label_all[idx],
                 'label2': self.label_all2[idx],
                 'num_nodes': num_nodes,
-                'assign_feats':self.assign_feat_all[idx].copy()}
+                'assign_feats':self.assign_feat_all[idx].copy()
+                }
         #print(len(graph.graphs))
+        
         for i in range(len(graph.graphs)-1):
             #print('adj_key')
             ind = i+1
@@ -140,18 +141,16 @@ class GraphSampler(torch.utils.data.Dataset):
             adj_padded_ = np.zeros((self.max_num_nodes, self.max_num_nodes))
             #print(graph.graphs[ind])
             #print(num_nodes_)
-
             adj_padded_[:num_nodes_,:num_nodes_] = graph.graphs[ind].todense().astype(float)
             #print('adj_padded_',adj_padded_)
-
             return_dic[adj_key] = adj_padded_
+            
         for i in range(len(graph.layer2pooling_matrices)):
             if i == len(graph.layer2pooling_matrices)-1:
                 #print('pool_adj_key')
                 for j in range(self.num_pool_final_matrix):
                     pool_adj_key = 'pool_adj_' + str(i) + '_' + str(j)
                     pool_adj = graph.layer2pooling_matrices[i][j]
-
                     pool_adj_padded = np.zeros(( self.max_num_nodes,self.max_num_nodes))
 
                     if self.norm == 'l1':
@@ -161,13 +160,11 @@ class GraphSampler(torch.utils.data.Dataset):
                     else:
                         pool_adj_padded[:pool_adj.shape[0],: pool_adj.shape[1]] = pool_adj.todense().astype(float)
                     return_dic[pool_adj_key] = pool_adj_padded
-
             else:
                 #print('pool_adj_key')
                 for j in range(self.num_pool_matrix):
                     pool_adj_key = 'pool_adj_' + str(i) + '_' + str(j)
                     pool_adj = graph.layer2pooling_matrices[i][j]
-
                     pool_adj_padded = np.zeros(( self.max_num_nodes,self.max_num_nodes))
 
                     if self.norm == 'l1':
